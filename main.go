@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+var hangman = 
+`
+----
+   |
+   ()
+  /||\
+   /\
+`
+
 func isAlpha(key string) bool {
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	return strings.Contains(letters, key)
@@ -51,12 +60,13 @@ func (game GameModel) Init() tea.Cmd {
 }
 
 func (game GameModel) View() string {
+	ui := "Game started\n"
 	wordToGuess := ""
 	for i := 0; i < game.NumberOfLetters; i++ {
 		wordToGuess += "_ "
 	}
 	strings.TrimSuffix(wordToGuess, " ")
-	return wordToGuess
+	return ui + wordToGuess
 }
 
 func (game GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
