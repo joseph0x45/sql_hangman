@@ -2,20 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
+
 	"github.com/blockloop/scan/v2"
 	tea "github.com/charmbracelet/bubbletea"
 	_ "github.com/lib/pq"
-	"strings"
 )
-
-var hangman = 
-`
-----
-   |
-   ()
-  /||\
-   /\
-`
 
 func isAlpha(key string) bool {
 	letters := "abcdefghijklmnopqrstuvwxyz"
@@ -33,6 +26,7 @@ type GameModel struct {
 	GuessesCount    int
 	GuessedLetters  []string
 	Finished        bool
+	db              *sql.DB
 }
 
 func initModel(dbConn *sql.DB) GameModel {
@@ -45,12 +39,17 @@ func initModel(dbConn *sql.DB) GameModel {
 	if err != nil {
 		panic(err)
 	}
+	letters := []string{}
+	for i := 0; i < game.NumberOfLetters; i++ {
+		letters = append(letters, "_")
+	}
 	gameModel := GameModel{
 		ID:              game.ID,
 		NumberOfLetters: game.NumberOfLetters,
 		GuessesCount:    0,
-		GuessedLetters:  []string{},
+		GuessedLetters:  letters,
 		Finished:        false,
+		db:              dbConn,
 	}
 	return gameModel
 }
@@ -60,13 +59,14 @@ func (game GameModel) Init() tea.Cmd {
 }
 
 func (game GameModel) View() string {
-	ui := "Game started\n"
-	wordToGuess := ""
+	ui := ""
 	for i := 0; i < game.NumberOfLetters; i++ {
-		wordToGuess += "_ "
+		ui += fmt.Sprintf("%s ", game.GuessedLetters[i])
 	}
-	strings.TrimSuffix(wordToGuess, " ")
-	return ui + wordToGuess
+	strings.TrimSuffix(ui, " ")
+	hangman := RenderArt(game.GuessesCount)
+	ui += fmt.Sprintf("\n\n%s", hangman)
+	return ui
 }
 
 func (game GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -76,8 +76,11 @@ func (game GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return game, tea.Quit
 		}
-		if !isAlpha(msg.String()) {
-			return nil, nil
+		if isAlpha(msg.String()) {
+			switch msg.String() {
+			case "a":
+				game.GuessesCount += 1
+			}
 		}
 	}
 	return game, nil
