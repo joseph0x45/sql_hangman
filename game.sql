@@ -11,7 +11,7 @@ INSERT INTO words (word) VALUES
 ('fish'),
 ('grape'),
 ('house'),
-('ice cream'),
+('xenophobia'),
 ('jacket');
 
 create table games (
@@ -27,3 +27,28 @@ create table guesses (
   is_right bool not null,
   game_id integer not null references games(id)
 );
+
+CREATE OR REPLACE FUNCTION start_game()
+RETURNS TRIGGER AS $$
+BEGIN
+  WITH random_word_data AS (
+    SELECT word, LENGTH(word) AS word_length
+    FROM words ORDER BY RANDOM() LIMIT 1
+  )
+  INSERT INTO games(word_to_guess, number_of_letters)
+  SELECT word, word_length FROM random_word_data;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION check_guess(guess_id INTEGER, guessed_letter TEXT, game_id INTEGER)
+RETURNS TRIGGER AS $$
+BEGIN
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_Guesses_AfterInsert
+AFTER INSERT ON guesses
+FOR EACH ROW
+EXECUTE FUNCTION check_guess(NEW.id, NEW.guess, NEW.game_id);
