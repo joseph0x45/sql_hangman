@@ -33,14 +33,14 @@ RETURNS TABLE(game_id INTEGER, number_of_letters INTEGER) AS $$
 DECLARE 
   new_game_id INTEGER;
   random_word TEXT;
+  word_length INTEGER;
 BEGIN
-  SELECT word
-  INTO random_word
-  FROM words ORDER BY RANDOM() LIMIT 1;
+  SELECT word INTO random_word FROM words ORDER BY RANDOM() LIMIT 1;
   INSERT INTO games(word_to_guess)
   VALUES(random_word)
   RETURNING id INTO new_game_id;
-  UPDATE games SET number_of_letters = LENGTH(random_word) WHERE id = new_game_id;
-  RETURN QUERY SELECT new_game_id, LENGTH(random_word);
+  SELECT LENGTH(random_word) INTO word_length;
+  UPDATE games SET number_of_letters = word_length WHERE id = new_game_id;
+  RETURN QUERY SELECT new_game_id, word_length;
 END;
 $$ LANGUAGE plpgsql;
