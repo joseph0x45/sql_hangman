@@ -6,3 +6,6 @@ setup-db:
 migrate:
 	@docker cp ./game.sql hangman:/tmp/schema.sql
 	@docker exec -it hangman psql -U postgres -d game -f /tmp/schema.sql
+
+build:
+	@go build -o hangman_sql .
