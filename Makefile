@@ -9,3 +9,6 @@ migrate:
 
 build:
 	@go build -o hangman_sql .
+
+play:
+	@./hangman_sql
