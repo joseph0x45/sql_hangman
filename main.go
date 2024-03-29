@@ -90,6 +90,9 @@ func (game GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			game.WrongGuesses = wrongGuessesCount
 			game.Finished = gameIsFinished
 			game.WordToGuess = WordToGuess
+			for _, position := range positions {
+				game.GuessedLetters[position-1] = key
+			}
 			if gameIsFinished {
 				return game, tea.Quit
 			}

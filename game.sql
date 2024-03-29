@@ -52,18 +52,39 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION get_occurences(word TEXT, guessed_letter TEXT)
+RETURNS INTEGER[] AS $$
+DECLARE
+  word_length INTEGER;
+  positions INTEGER[] DEFAULT '{}';
+  i INTEGER;
+BEGIN
+  word_length := LENGTH(word);
+  FOR i in 1..word_length LOOP
+    IF SUBSTRING(word FROM i FOR 1) = guessed_letter THEN
+      positions := positions || i;
+    END IF;
+  END LOOP;
+  RETURN positions;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION process_guess(guessed_letter TEXT, game_id INTEGER)
 RETURNS TABLE(wrong_guesses INTEGER, game_state bool, guess_positions INTEGER[], word_to_guess TEXT) AS $$
 DECLARE 
   current_game RECORD;
   guess_is_right BOOL;
-  wrong_guesses_count INTEGER;
-  game_is_finished BOOl;
+  wrong_guesses_count INTEGER DEFAULT 0;
+  game_is_finished BOOl DEFAULT false;
   word_to_guess TEXT DEFAULT '';
+  positions INTEGER[];
 BEGIN
   SELECT * INTO current_game FROM games where id = game_id;
   IF position(guessed_letter IN current_game.word_to_guess) > 0 THEN
     guess_is_right := true;
+    PERFORM insert_guess(guessed_letter, guess_is_right, game_id);
+    SELECT get_occurences(current_game.word_to_guess, guessed_letter) into positions;
+    SELECT COUNT(*) INTO wrong_guesses_count FROM guesses g where g.game_id = current_game.id AND g.is_right = false;
   ELSE
     guess_is_right := false;
     PERFORM insert_guess(guessed_letter, guess_is_right, game_id);
@@ -74,7 +95,7 @@ BEGIN
     ELSE
       game_is_finished := false;
     END IF;
-    RETURN QUERY SELECT wrong_guesses_count, game_is_finished, ARRAY[]::INTEGER[], word_to_guess;
   END IF;
+  RETURN QUERY SELECT wrong_guesses_count, game_is_finished, positions, word_to_guess;
 END;
 $$ LANGUAGE plpgsql;
