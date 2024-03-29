@@ -77,7 +77,7 @@ DECLARE
   wrong_guesses_count INTEGER DEFAULT 0;
   game_is_finished BOOl DEFAULT false;
   word_to_guess TEXT DEFAULT '';
-  positions INTEGER[];
+  positions INTEGER[] DEFAULT '{}';
 BEGIN
   SELECT * INTO current_game FROM games where id = game_id;
   IF position(guessed_letter IN current_game.word_to_guess) > 0 THEN

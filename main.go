@@ -3,15 +3,35 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/blockloop/scan/v2"
 	tea "github.com/charmbracelet/bubbletea"
 	_ "github.com/lib/pq"
-	"strings"
 )
 
 func isAlpha(key string) bool {
 	letters := "abcdefghijklmnopqrstuvwxyz"
 	return strings.Contains(letters, key)
+}
+
+func parseIntArray(intArrayStr string) []int {
+	var result []int
+	if intArrayStr == "{}" {
+		return result
+	}
+	intArrayStr = strings.TrimPrefix(intArrayStr, "{")
+	intArrayStr = strings.TrimSuffix(intArrayStr, "}")
+	parts := strings.Split(intArrayStr, ",")
+	for _, part := range parts {
+		intValue, err := strconv.Atoi(part)
+		if err != nil {
+			panic(err)
+		}
+		result = append(result, intValue)
+	}
+	return result
 }
 
 type GameData struct {
@@ -82,17 +102,16 @@ func (game GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return game, tea.Quit
 		}
 		if isAlpha(key) {
-			wrongGuessesCount, gameIsFinished, positions, WordToGuess := 0, false, []uint8{}, ""
-			err := game.db.QueryRow("select * from process_guess($1, $2)", key, game.ID).Scan(&wrongGuessesCount, &gameIsFinished, &positions, &WordToGuess)
+			wrongGuessesCount, gameIsFinished, positionsStr, WordToGuess := 0, false, "", ""
+			err := game.db.QueryRow("select * from process_guess($1, $2)", key, game.ID).Scan(&wrongGuessesCount, &gameIsFinished, &positionsStr, &WordToGuess)
 			if err != nil {
 				panic(err)
 			}
 			game.WrongGuesses = wrongGuessesCount
 			game.Finished = gameIsFinished
 			game.WordToGuess = WordToGuess
-			for _, position := range positions {
-				game.GuessedLetters[position-1] = key
-			}
+			positions := parseIntArray(positionsStr)
+			fmt.Println(positions)
 			if gameIsFinished {
 				return game, tea.Quit
 			}
@@ -110,6 +129,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	f, err := tea.LogToFile("debug.log", "debug")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
 	initalModel := initModel(dbConn)
 	program := tea.NewProgram(initalModel)
 	if _, err := program.Run(); err != nil {
