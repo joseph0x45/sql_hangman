@@ -24,7 +24,8 @@ type GameModel struct {
 	NumberOfLetters int
 	WrongGuesses    int `db:"wrong_guesses"`
 	GuessedLetters  []string
-	Finished        bool `db:"game_state"`
+	Finished        bool   `db:"game_state"`
+	WordToGuess     string `db:"word_to_guess"`
 	db              *sql.DB
 }
 
@@ -48,6 +49,7 @@ func initModel(dbConn *sql.DB) GameModel {
 		WrongGuesses:    0,
 		GuessedLetters:  letters,
 		Finished:        false,
+		WordToGuess:     "",
 		db:              dbConn,
 	}
 	return gameModel
@@ -59,7 +61,7 @@ func (game GameModel) Init() tea.Cmd {
 
 func (game GameModel) View() string {
 	if game.Finished {
-		return "You failed to guess the word. ewww brother ewww "
+		return fmt.Sprintf("You died!! The word to guess was %s\n", game.WordToGuess)
 	}
 	ui := ""
 	for i := 0; i < game.NumberOfLetters; i++ {
@@ -76,17 +78,21 @@ func (game GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		key := msg.String()
 		switch key {
-		case "ctrl+c":
+		case "ctrl+c", "esc":
 			return game, tea.Quit
 		}
 		if isAlpha(key) {
-			wrongGuessesCount, gameIsFinished, positions := 0, false, []uint8{}
-			err := game.db.QueryRow("select * from process_guess($1, $2)", key, game.ID).Scan(&wrongGuessesCount, &gameIsFinished, &positions)
+			wrongGuessesCount, gameIsFinished, positions, WordToGuess := 0, false, []uint8{}, ""
+			err := game.db.QueryRow("select * from process_guess($1, $2)", key, game.ID).Scan(&wrongGuessesCount, &gameIsFinished, &positions, &WordToGuess)
 			if err != nil {
 				panic(err)
 			}
 			game.WrongGuesses = wrongGuessesCount
 			game.Finished = gameIsFinished
+			game.WordToGuess = WordToGuess
+			if gameIsFinished {
+				return game, tea.Quit
+			}
 		}
 	}
 	return game, nil

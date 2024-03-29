@@ -53,12 +53,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION process_guess(guessed_letter TEXT, game_id INTEGER)
-RETURNS TABLE(wrong_guesses INTEGER, game_state bool, guess_positions INTEGER[]) AS $$
+RETURNS TABLE(wrong_guesses INTEGER, game_state bool, guess_positions INTEGER[], word_to_guess TEXT) AS $$
 DECLARE 
   current_game RECORD;
   guess_is_right BOOL;
   wrong_guesses_count INTEGER;
   game_is_finished BOOl;
+  word_to_guess TEXT DEFAULT '';
 BEGIN
   SELECT * INTO current_game FROM games where id = game_id;
   IF position(guessed_letter IN current_game.word_to_guess) > 0 THEN
@@ -69,10 +70,11 @@ BEGIN
     SELECT COUNT(*) INTO wrong_guesses_count FROM guesses g where g.game_id = current_game.id AND g.is_right = false;
     IF wrong_guesses_count = 7 THEN
       game_is_finished := true;
+      word_to_guess := current_game.word_to_guess;
     ELSE
       game_is_finished := false;
     END IF;
-    RETURN QUERY SELECT wrong_guesses_count, game_is_finished, ARRAY[]::INTEGER[];
+    RETURN QUERY SELECT wrong_guesses_count, game_is_finished, ARRAY[]::INTEGER[], word_to_guess;
   END IF;
 END;
 $$ LANGUAGE plpgsql;
