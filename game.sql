@@ -44,3 +44,27 @@ BEGIN
   RETURN QUERY SELECT new_game_id, word_length;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION insert_guess(guess TEXT, is_right BOOL, game_id INTEGER)
+RETURNS void as $$
+BEGIN
+  INSERT INTO guesses(guess, is_right, game_id) VALUES(guess, is_right, game_id);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION process_guess(guessed_letter TEXT, game_id INTEGER)
+RETURNS INTEGER AS $$
+DECLARE 
+  current_game record;
+  guess_is_right bool;
+BEGIN
+  SELECT * INTO current_game FROM games where id = game_id;
+  IF position(guessed_letter IN current_game.word_to_guess) > 0 THEN
+    guess_is_right := true;
+  ELSE
+    guess_is_right := false;
+    PERFORM insert_guess(guessed_letter, guess_is_right, game_id);
+  END IF;
+  RETURN 2;
+END;
+$$ LANGUAGE plpgsql;

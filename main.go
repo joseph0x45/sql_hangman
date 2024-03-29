@@ -3,11 +3,10 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"strings"
-
 	"github.com/blockloop/scan/v2"
 	tea "github.com/charmbracelet/bubbletea"
 	_ "github.com/lib/pq"
+	"strings"
 )
 
 func isAlpha(key string) bool {
