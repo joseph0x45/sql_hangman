@@ -3,12 +3,11 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/blockloop/scan/v2"
 	tea "github.com/charmbracelet/bubbletea"
 	_ "github.com/lib/pq"
+	"strconv"
+	"strings"
 )
 
 func isAlpha(key string) bool {
@@ -34,6 +33,20 @@ func parseIntArray(intArrayStr string) []int {
 	return result
 }
 
+func parseStrArray(strArray string) []string {
+	var result []string
+	if strArray == "{}" {
+		return result
+	}
+	strArray = strings.TrimPrefix(strArray, "{")
+	strArray = strings.TrimSuffix(strArray, "}")
+	parts := strings.Split(strArray, ",")
+	for _, part := range parts {
+		result = append(result, part)
+	}
+	return result
+}
+
 type GameData struct {
 	ID              string `db:"game_id"`
 	NumberOfLetters int    `db:"number_of_letters"`
@@ -44,6 +57,7 @@ type GameModel struct {
 	NumberOfLetters int
 	WrongGuesses    int `db:"wrong_guesses"`
 	GuessedLetters  []string
+	AlreadyGuessed  []string
 	Finished        bool   `db:"game_state"`
 	WordToGuess     string `db:"word_to_guess"`
 	db              *sql.DB
@@ -68,6 +82,7 @@ func initModel(dbConn *sql.DB) GameModel {
 		NumberOfLetters: game.NumberOfLetters,
 		WrongGuesses:    0,
 		GuessedLetters:  letters,
+		AlreadyGuessed:  []string{},
 		Finished:        false,
 		WordToGuess:     "",
 		db:              dbConn,
@@ -80,16 +95,27 @@ func (game GameModel) Init() tea.Cmd {
 }
 
 func (game GameModel) View() string {
-	if game.Finished {
-		return fmt.Sprintf("You died!! The word to guess was %s\n", game.WordToGuess)
-	}
 	ui := ""
 	for i := 0; i < game.NumberOfLetters; i++ {
 		ui += fmt.Sprintf("%s ", game.GuessedLetters[i])
 	}
 	strings.TrimSuffix(ui, " ")
+	ui += "\t"
+	ui += "Guess history: "
+	wrongGuesses := ""
+	for _, guess := range game.AlreadyGuessed {
+		wrongGuesses += fmt.Sprintf("%s ", guess)
+	}
+	ui += wrongGuesses
 	hangman := RenderArt(game.WrongGuesses)
 	ui += fmt.Sprintf("\n\n%s", hangman)
+	if game.Finished {
+		if game.WordToGuess != "" {
+			ui += fmt.Sprintf("\nYou failed to guess: %s\n\n", game.WordToGuess)
+		} else {
+			ui += fmt.Sprintf("\nYay you win :)\n\n")
+		}
+	}
 	return ui
 }
 
@@ -102,17 +128,21 @@ func (game GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return game, tea.Quit
 		}
 		if isAlpha(key) {
-			wrongGuessesCount, gameIsFinished, positionsStr, WordToGuess := 0, false, "", ""
-			err := game.db.QueryRow("select * from process_guess($1, $2)", key, game.ID).Scan(&wrongGuessesCount, &gameIsFinished, &positionsStr, &WordToGuess)
+			game.AlreadyGuessed = append(game.AlreadyGuessed, key)
+			wrongGuessesCount, gameIsFinished, positionsStr, WordToGuess, alreadyGuessed := 0, false, "", "", ""
+			err := game.db.QueryRow("select * from process_guess($1, $2)", key, game.ID).Scan(&wrongGuessesCount, &gameIsFinished, &positionsStr, &WordToGuess, &alreadyGuessed)
 			if err != nil {
 				panic(err)
 			}
 			game.WrongGuesses = wrongGuessesCount
 			game.Finished = gameIsFinished
 			game.WordToGuess = WordToGuess
+			game.AlreadyGuessed = parseStrArray(alreadyGuessed)
 			positions := parseIntArray(positionsStr)
-			fmt.Println(positions)
-			if gameIsFinished {
+			for _, position := range positions {
+				game.GuessedLetters[position-1] = key
+			}
+			if game.Finished {
 				return game, tea.Quit
 			}
 		}

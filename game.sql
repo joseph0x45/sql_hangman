@@ -45,10 +45,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION insert_guess(guess TEXT, is_right BOOL, game_id INTEGER)
+CREATE OR REPLACE FUNCTION insert_guess(guessed_letter TEXT, is_right BOOL, current_game_id INTEGER)
 RETURNS void as $$
 BEGIN
-  INSERT INTO guesses(guess, is_right, game_id) VALUES(guess, is_right, game_id);
+  IF (SELECT COUNT(*) FROM guesses g WHERE g.guess = guessed_letter AND g.game_id = current_game_id) = 0 THEN
+    INSERT INTO guesses(guess, is_right, game_id) VALUES(guessed_letter, is_right, current_game_id);
+  END IF;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -70,7 +72,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION process_guess(guessed_letter TEXT, game_id INTEGER)
-RETURNS TABLE(wrong_guesses INTEGER, game_state bool, guess_positions INTEGER[], word_to_guess TEXT) AS $$
+RETURNS TABLE(wrong_guesses INTEGER, game_state bool, guess_positions INTEGER[], word_to_guess TEXT, already_guessed TEXT[]) AS $$
 DECLARE 
   current_game RECORD;
   guess_is_right BOOL;
@@ -78,6 +80,9 @@ DECLARE
   game_is_finished BOOl DEFAULT false;
   word_to_guess TEXT DEFAULT '';
   positions INTEGER[] DEFAULT '{}';
+  right_guesses INTEGER DEFAULT 0;
+  already_guessed_letters TEXT[] DEFAULT '{}';
+  letter TEXT;
 BEGIN
   SELECT * INTO current_game FROM games where id = game_id;
   IF position(guessed_letter IN current_game.word_to_guess) > 0 THEN
@@ -85,17 +90,30 @@ BEGIN
     PERFORM insert_guess(guessed_letter, guess_is_right, game_id);
     SELECT get_occurences(current_game.word_to_guess, guessed_letter) into positions;
     SELECT COUNT(*) INTO wrong_guesses_count FROM guesses g where g.game_id = current_game.id AND g.is_right = false;
+    SELECT COUNT(*) INTO right_guesses FROM guesses g where g.game_id = current_game.id AND g.is_right = true;
+    word_to_guess := current_game.word_to_guess;
+    SELECT ARRAY_AGG(guess) AS guessed_letters FROM guesses g where g.game_id = current_game.id INTO already_guessed_letters;
+    FOREACH letter IN ARRAY already_guessed_letters
+    LOOP
+      word_to_guess := REPLACE(word_to_guess, letter, '');
+    END LOOP;
+    IF word_to_guess = '' THEN
+      UPDATE games SET finished = true WHERE id = current_game.id;
+      game_is_finished := true;
+    END IF;
   ELSE
     guess_is_right := false;
     PERFORM insert_guess(guessed_letter, guess_is_right, game_id);
     SELECT COUNT(*) INTO wrong_guesses_count FROM guesses g where g.game_id = current_game.id AND g.is_right = false;
     IF wrong_guesses_count = 7 THEN
+      UPDATE games SET finished = true WHERE id = current_game.id;
       game_is_finished := true;
       word_to_guess := current_game.word_to_guess;
     ELSE
       game_is_finished := false;
     END IF;
   END IF;
-  RETURN QUERY SELECT wrong_guesses_count, game_is_finished, positions, word_to_guess;
+  SELECT ARRAY_AGG(guess) AS guessed_letters FROM guesses g where g.game_id = current_game.id INTO already_guessed_letters;
+  RETURN QUERY SELECT wrong_guesses_count, game_is_finished, positions, word_to_guess, already_guessed_letters;
 END;
 $$ LANGUAGE plpgsql;
